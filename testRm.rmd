@@ -1,0 +1,97 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Setup process
+```{r}
+library(tidyverse)
+```
+The code chunk appears:
+```{r setup}
+url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+
+file_names <- c("time_series_covid19_confirmed_US.csv",  "time_series_covid19_confirmed_global.csv", "time_series_covid19_deaths_US.csv",  "time_series_covid19_deaths_global.csv")
+
+urls <- str_c(url_in, file_names)
+```
+
+## Loading data
+Here we load the data from github into memory.
+```{r import_data, message = FALSE}
+us_cases <- read_csv(urls[3])
+global_cases <- read_csv(urls[2])
+us_deaths <- read_csv(urls[3])
+global_deaths <- read_csv(urls[4])
+```
+Clean global cases
+```{r clean global cases}
+global_cases <- global_cases %>%
+pivot_longer(cols = -c(`Province/State`, `Country/Region`, Lat, Long), names_to = "date", values_to = "cases") %>%
+select(-c(Lat,Long))
+
+global_cases
+```
+Clean global deaths
+```{r global_deaths}
+global_deaths <- global_deaths %>%
+  pivot_longer(cols = -c(`Province/State`, `Country/Region`, Lat, Long), names_to = "date", values_to = "deaths") %>%
+  select(-c(Lat,Long))
+
+global_deaths
+```
+More clean up and processing
+```{r merge_global_cases_and_death}
+library(lubridate)
+
+global <- global_cases %>%
+    full_join(global_deaths) %>%
+    rename(Country_Region = `Country/Region`, Province_State = `Province/State`) %>%
+    mutate(date = mdy(date))
+
+global
+```
+
+
+us cases
+```{r us_cases}
+us_cases <- us_cases %>% pivot_longer(cols = -c(UID:Combined_Key), names_to = "date", values_to = "cases") %>% select(Admin2:cases) %>% mutate(date = mdy(date)) %>%
+select(-c(Lat,Long_))
+
+us_cases
+```
+
+us deaths
+```{r us_deaths}
+us_deaths <- us_deaths %>% pivot_longer(cols = -c(UID:Population), names_to = "date", values_to = "deaths") %>% select(Admin2:deaths) %>% mutate(date = mdy(date)) %>%
+select(-c(Lat,Long_))
+
+us_deaths
+```
+
+parsed and clean us
+```{r}
+us <- us_cases %>% full_join(us_deaths)
+us
+```
+
+global with population
+```{r global_population}
+global <- global %>% unite("Combined_Key", c('Province_State', 'Country_Region'), remove = FALSE, na.rm = TRUE, sep = ", ")
+
+global
+```
+
+attempting to add population to global
+```{r lookup_table}
+uid_lookup_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv"
+
+uid <- read_csv(uid_lookup_url) %>% select(-c(Lat, Long_, Combined_Key, code3, iso2, iso3, Admin2))
+
+global <- global %>% left_join(uid, by = c("Province_State", "Country_Region")) %>%
+        select(-c(UID, FIPS)) %>%
+        select(Province_State, Country_Region, date, cases, deaths, Population,  Combined_Key)
+
+global
+```
+

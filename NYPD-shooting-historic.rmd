@@ -1,0 +1,123 @@
+---
+title: 'NYPD SHOOTING(HISTORIC): Age, Race and Economic influence'
+author: "Ayomide Aregbede"
+date: "2023-02-18"
+output:
+  html_document:
+    df_print: paged
+---
+
+# NYPD SHOOTING DATA HISTORIC.
+This report aims to show the correlation between shootings,
+race, age group and prevaling economics.
+
+
+## Data setup
+```{r setup, results='hide', message=FALSE, warning=FALSE}
+library("tidyverse")
+csv_data_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+main_data <- read_csv(csv_data_url)
+```
+
+## General Sea level view
+### Age group correlation with perps
+```{r include = FALSE}
+# main_data %>% count(PERP_AGE_GROUP, sort = TRUE)
+
+# perps_age_grp <- main_data %>% drop_na(PERP_AGE_GROUP) %>% count(PERP_AGE_GROUP, sort = TRUE)
+#
+# perps_age_grp %>% filter(!PERP_AGE_GROUP %in% c('1020', '224', '940')) %>% ggplot(aes(x = PERP_AGE_GROUP, y = n)) + geom_line(aes (color = "perp_age_group")) +
+#   geom_point(aes(color = "perp_age_group")) +
+#   geom_line (aes(y = n, color = "n")) +
+#   geom_point (aes(y = n, color = "n")) +
+#   scale_y_log10() +
+#   theme (legend.position="bottom", axis.text.x = element_text(angle = 90)) +
+#   labs(title = "AGE GROUP OF PERPS BEHIND SHOOTINGS", y= NULL)
+```
+
+```{r most_perps_age_group, warning=FALSE}
+perps_age_grp <- main_data %>% drop_na(PERP_AGE_GROUP) %>% count(PERP_AGE_GROUP, sort = TRUE)
+
+perps_age_grp %>% filter(!PERP_AGE_GROUP %in% c('1020', '224', '940')) %>% ggplot(aes(x = PERP_AGE_GROUP, y = n, fill = n)) + geom_bar(stat='identity') + labs(title = "AGE GROUP OF PERPS VS SHOOTINGS", y= NULL) + coord_flip()
+```
+
+### Race correlation with perps
+```{r most_perps_race, warning=FALSE}
+perps_race <- main_data %>% drop_na() %>% count(PERP_RACE, sort = TRUE)
+
+perps_race %>% ggplot(aes(x = PERP_RACE, y = n, fill = PERP_RACE)) + geom_bar(stat='identity') + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title = "RACE OF PERPS BEHIND SHOOTINGS", y= NULL)
+```
+
+### Age group correlation with victims
+```{r most_victim_age_group, warning=FALSE}
+vic_age_grp <- main_data %>% drop_na(VIC_AGE_GROUP) %>% count(VIC_AGE_GROUP, sort = TRUE)
+
+vic_age_grp %>% filter(!VIC_AGE_GROUP %in% c('1020', '224', '940')) %>% ggplot(aes(x = VIC_AGE_GROUP, y = n, fill = VIC_AGE_GROUP)) + geom_bar(stat='identity') + labs(title = "AGE GROUP OF VICTIMS OF SHOOTINGS", y= NULL)
+```
+
+### Race correlation with victims
+
+```{r most_victim_race, warning=FALSE}
+vics_race <- main_data %>% drop_na() %>% count(VIC_RACE, sort = TRUE)
+
+vics_race %>% ggplot(aes(x = VIC_RACE, y = n)) + geom_bar(stat='identity') + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title = "RACE OF VICTIMS VS SHOOTINGS", y= NULL)
+```
+## Other Analysis
+
+### Basic data prep
+``` {r parse_and_remove_unused}
+library("hydroTSM")
+library(lubridate)
+
+analytics_data <- main_data %>% mutate(date = mdy(OCCUR_DATE)) %>% select(-c(X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat, JURISDICTION_CODE, STATISTICAL_MURDER_FLAG)) %>%
+mutate(date = time2season(date,out.fmt = "seasons")) 
+```
+### What's the shooting trend over the seasons of the year
+
+As we can see with the line graph below, it would seem that shootings are more in the summer.
+Corroborating the report with transportation data, recreational data, and general economic activities will help us better understand what the potential cause of increases shootings during Summer is. I'm biased to say more time off work, and increase propensity/desire for entertainment and the awareness of insufficiency might be the cause. 
+
+```{r seasons_of_year, warning=FALSE}
+
+analytics_data %>% count(date, sort = TRUE) %>% ggplot(aes(x = date, y = n, group = 1)) + geom_point(size=3) + geom_point(aes(color = "date")) + geom_line (aes(y = n, color = "n")) + theme_minimal() + labs(title = "RACE OF VICTIMS VS SHOOTINGS", y= NULL)
+
+```
+
+### What's the economic situation of the locations where the shootings happen?
+My bias might be influencing my deduction, but the data shows a strong correlation 
+between low income housing(related economic situations), and shootings. 
+
+```{r shootings_and_economics, warning=FALSE}
+
+analytics_data %>% count(LOCATION_DESC, sort = TRUE) %>% drop_na() %>% mutate(LOCATION_DESC = factor(LOCATION_DESC , LOCATION_DESC )) %>% ggplot(aes(x = LOCATION_DESC, y = n, group = 1)) + geom_bar(stat='identity') + theme(axis.text.x=element_text(angle=90, hjust=1)) + labs(title = "Economics of shootings location", y= "Frequency of shootings", x= "Location")
+
+```
+
+### What's the location gender correlation?
+Overall, it would seem we have more male victims than female. 
+```{r location_gender_col, warning=FALSE}
+
+analytics_data %>% count(BORO, VIC_SEX, sort = TRUE) %>% drop_na() %>% ggplot(aes(x = BORO, y = n, fill = VIC_SEX)) + geom_bar(stat='identity') + theme_grey() + labs(title = "Boro vs Gender", y= "Frequency of shootings", x= "BORO")
+
+```
+
+### Shooting trends
+There is a gradual decline of gunshot victims since 2005, and drastically dipped between 2015-2019.
+
+```{r shooting_trends, warning=FALSE}
+library(lubridate)
+
+analytics_data %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% mutate(OCCUR_YEAR = year(OCCUR_DATE)) %>% ggplot(aes(group = VIC_RACE, x = OCCUR_YEAR)) + geom_line(aes(fill=..count.., color = VIC_RACE), stat="bin", binwidth=1) +
+        geom_point(aes(color=VIC_RACE), stat="bin", binwidth=1) + theme_minimal() + labs(title = "RACE OF VICTIMS VS SHOOTINGS", y= NULL)
+```
+
+
+## Potential Bias
+
+As an African, I assumed that the perpetrators of most shootings would be white. 
+I initially struggled when the data revealed the opposite. I also assumed that most victims would be female, and the data showed the opposite.
+
+While there is some correlation between gun shot victims and the economic situation of the prevaling environment - which I assumed would be, I still need to gather data about the GDP of each BORO in NYPD to deduce causation. 
+
+
