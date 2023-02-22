@@ -5,22 +5,40 @@ date: "2023-02-18"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 # NYPD SHOOTING DATA HISTORIC.
-This report aims to show the correlation between shootings,
-race, age group and prevaling economics.
 
+## Data Source and Summary
+Sourcing data from City Of New York at: https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?
+accessType=DOWNLOAD The source data contains the incidents of shootings that occurred in New York City in the years from 2006 to 2021. 
+The data includes demographics of the perpetrators and victims as well as location data for the incident.
+
+
+This report aims to show the correlation between shootings,
+race, age group and prevailing economics.
+
+It attempts to answer the following questions:
+
+* What location and gender has the most risk of being a gunshot victim?
+* What economic situation, e.g., housing setup, has the most risk of gun violence?
+* What age of people needs the most counsel and help from society to prevent gun violence?
+* Is New York becoming safer?
+* At what seasons of the year should people and law enforcement be more conscious of the safety of citizens? 
 
 ## Data setup
-```{r setup, results='hide', message=FALSE, warning=FALSE}
+```{r setup, message=FALSE, warning=FALSE}
 library("tidyverse")
 csv_data_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
 
 main_data <- read_csv(csv_data_url)
+
+summary(main_data)
 ```
 
 ## General Sea level view
+This section presents a high level view of quick facts gathered from our data.
 ### Age group correlation with perps
 ```{r include = FALSE}
 # main_data %>% count(PERP_AGE_GROUP, sort = TRUE)
@@ -66,12 +84,17 @@ vics_race %>% ggplot(aes(x = VIC_RACE, y = n)) + geom_bar(stat='identity') + the
 ## Other Analysis
 
 ### Basic data prep
+* Removing several fields irrelevant to the goal of this report.
+* Formatting the `OCCUR_DATE` field into a date range
+* Adding a new field `OCCUR_SEASON` to represent the weather seasons, e.g Summer, Winter, the shootings occurred.
+* Adding a new field `OCCUR_YEAR` to represent the year the shootings occurred.
+
 ``` {r parse_and_remove_unused}
 library("hydroTSM")
 library(lubridate)
 
-analytics_data <- main_data %>% mutate(date = mdy(OCCUR_DATE)) %>% select(-c(X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat, JURISDICTION_CODE, STATISTICAL_MURDER_FLAG)) %>%
-mutate(date = time2season(date,out.fmt = "seasons")) 
+analytics_data <- main_data %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% select(-c(X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat, JURISDICTION_CODE, STATISTICAL_MURDER_FLAG)) %>%
+mutate(OCCUR_SEASON = time2season(OCCUR_DATE,out.fmt = "seasons")) %>% mutate(OCCUR_YEAR = year(OCCUR_DATE)) 
 ```
 ### What's the shooting trend over the seasons of the year
 
@@ -80,7 +103,7 @@ Corroborating the report with transportation data, recreational data, and genera
 
 ```{r seasons_of_year, warning=FALSE}
 
-analytics_data %>% count(date, sort = TRUE) %>% ggplot(aes(x = date, y = n, group = 1)) + geom_point(size=3) + geom_point(aes(color = "date")) + geom_line (aes(y = n, color = "n")) + theme_minimal() + labs(title = "RACE OF VICTIMS VS SHOOTINGS", y= NULL)
+analytics_data %>% count(OCCUR_SEASON, sort = TRUE) %>% ggplot(aes(x = OCCUR_SEASON, y = n, group = 1)) + geom_point(size=3) + geom_point(aes(color = "OCCUR_SEASON")) + geom_line (aes(y = n, color = "n")) + theme_minimal() + labs(title = "SEASONS OF THE YEAR VS SHOOTINGS", y= NULL)
 
 ```
 
@@ -95,7 +118,8 @@ analytics_data %>% count(LOCATION_DESC, sort = TRUE) %>% drop_na() %>% mutate(LO
 ```
 
 ### What's the location gender correlation?
-Overall, it would seem we have more male victims than female. 
+Overall, it would seem we have more male victims than female. However, Female victims increase as the GDP of the location decreases.
+
 ```{r location_gender_col, warning=FALSE}
 
 analytics_data %>% count(BORO, VIC_SEX, sort = TRUE) %>% drop_na() %>% ggplot(aes(x = BORO, y = n, fill = VIC_SEX)) + geom_bar(stat='identity') + theme_grey() + labs(title = "Boro vs Gender", y= "Frequency of shootings", x= "BORO")
@@ -103,21 +127,30 @@ analytics_data %>% count(BORO, VIC_SEX, sort = TRUE) %>% drop_na() %>% ggplot(ae
 ```
 
 ### Shooting trends
-There is a gradual decline of gunshot victims since 2005, and drastically dipped between 2015-2019.
+There is a gradual decline of gunshot victims since 2005 which drastically dipped between 2015-2019.
 
 ```{r shooting_trends, warning=FALSE}
 library(lubridate)
 
-analytics_data %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% mutate(OCCUR_YEAR = year(OCCUR_DATE)) %>% ggplot(aes(group = VIC_RACE, x = OCCUR_YEAR)) + geom_line(aes(fill=..count.., color = VIC_RACE), stat="bin", binwidth=1) +
-        geom_point(aes(color=VIC_RACE), stat="bin", binwidth=1) + theme_minimal() + labs(title = "RACE OF VICTIMS VS SHOOTINGS", y= NULL)
+analytics_data %>% ggplot(aes(group = VIC_RACE, x = OCCUR_YEAR)) + geom_line(aes(fill=..count.., color = VIC_RACE), stat="bin", binwidth=1) +
+        geom_point(aes(color=VIC_RACE), stat="bin", binwidth=1) + theme_minimal() + labs(title = "SHOOTINGS OVER THE YEARS", y= NULL)
 ```
 
+## Summary 
+Most shootings happened near Multiple dwelling zones, specifically public housing, and similar economic environments associated with low-income households.
+We also see that most shootings happened in Brooklyn, and most victims were primarily black victims and between the 25-44 age range.
+
+Further analysis might clearly show the correlation between economics and gun shooting.
 
 ## Potential Bias
 
-As an African, I assumed that the perpetrators of most shootings would be white. 
-I initially struggled when the data revealed the opposite. I also assumed that most victims would be female, and the data showed the opposite.
+### Personal Bias
+It is easy to assume that the race of perpetrators of most shootings would be white, however this data revealed the opposite. 
+It is also easy to assume that most victims would be female, and the data showed the opposite.
 
-While there is some correlation between gun shot victims and the economic situation of the prevaling environment - which I assumed would be, I still need to gather data about the GDP of each BORO in NYPD to deduce causation. 
+### Bias in the Data
+Similar to the initial bias that approached this report, the bias of the person reporting this data could influence the quality of the data. 
+More so, a significant number of "unknown" and empty values could shift this report's deductions. 
+Finally, gun violence reporting is highly debated and can be a political tool to communicate and further discrimination. 
 
 
